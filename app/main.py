@@ -99,7 +99,7 @@ def refresh(project_id: str, force: bool = False):
 def api_search(q: str = Query(..., min_length=1), project_id: str | None = None, k: int = 8):
     if project_id:
         snap = con.execute(
-            "SELECT id FROM snapshot WHERE project_id=? ORDER BY rowid DESC LIMIT 1",
+            "SELECT id FROM snapshot WHERE project_id=? ORDER BY created_at DESC LIMIT 1",
             (project_id,)).fetchone()
         if not snap:
             raise HTTPException(404, "该项目还没有索引")

@@ -1,11 +1,20 @@
-"""SQLite 存储层（零外部依赖：不装 PG / 不用 ORM）。"""
-import json
+"""存储层：SQLite（默认，评委复现）与 MySQL（线上）双后端。
+
+统一 API：
+  con.execute(sql, params) -> cursor(fetchone/fetchall/lastrowid)
+  con.commit() / con.close() / con.backend -> "sqlite" | "mysql"
+
+约定：业务 SQL 一律用 `?` 占位符；MySQL 后端在 execute 里转成 `%s`。
+时间戳不用数据库函数（`datetime('now')` 是 SQLite 专有），统一由 `now()` 传参。
+"""
 import sqlite3
+from datetime import datetime
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
-from app.config import DB_PATH
+from app.config import DB_BACKEND, DB_PATH, DB_URL, ROOT
 
-SCHEMA = """
+SQLITE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS project (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -90,20 +99,85 @@ CREATE INDEX IF NOT EXISTS idx_finding_snap ON finding(snapshot_id);
 """
 
 
-def connect(db_path: Path | None = None) -> sqlite3.Connection:
-    p = Path(db_path or DB_PATH)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(p, check_same_thread=False)
-    con.row_factory = sqlite3.Row
-    con.execute("PRAGMA journal_mode=WAL")
-    con.executescript(SCHEMA)
-    return con
+def now() -> str:
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def rebuild_fts(con: sqlite3.Connection) -> None:
-    con.executescript("INSERT INTO chunk_fts(chunk_fts) VALUES('rebuild');")
-    con.commit()
+class SQLiteConn:
+    backend = "sqlite"
+
+    def __init__(self, db_path: Path):
+        self.db_path = Path(db_path)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._con = sqlite3.connect(self.db_path, check_same_thread=False)
+        self._con.row_factory = sqlite3.Row
+        self._con.execute("PRAGMA journal_mode=WAL")
+        self._con.executescript(SQLITE_SCHEMA)
+
+    def execute(self, sql: str, params=()):
+        return self._con.execute(sql, params)
+
+    def executescript(self, sql: str):
+        return self._con.executescript(sql)
+
+    def commit(self):
+        self._con.commit()
+
+    def close(self):
+        self._con.close()
 
 
-def rows_to_json(rows) -> list[dict]:
-    return [json.loads(json.dumps(dict(r))) for r in rows]
+class MySQLConn:
+    backend = "mysql"
+
+    def __init__(self, url: str):
+        import pymysql
+        from pymysql.cursors import DictCursor
+        u = urlparse(url)
+        if not u.hostname:
+            raise ValueError("MAILUO_DB_URL 格式错误，应为 mysql://user:pass@host:port/db")
+        self._con = pymysql.connect(
+            host=u.hostname, port=u.port or 3306, user=unquote(u.username or ""),
+            password=unquote(u.password or ""), database=u.path.lstrip("/"),
+            charset="utf8mb4", cursorclass=DictCursor, autocommit=False,
+            connect_timeout=10, read_timeout=30)
+        self._ensure_schema()
+
+    def _ensure_schema(self):
+        schema = (ROOT / "app" / "infra" / "schema_mysql.sql").read_text(encoding="utf-8")
+        with self._con.cursor() as cur:
+            for stmt in [s.strip() for s in schema.split(";") if s.strip()]:
+                cur.execute(stmt)
+        self._con.commit()
+
+    def execute(self, sql: str, params=()):
+        cur = self._con.cursor()
+        cur.execute(sql.replace("?", "%s"), params)
+        return cur
+
+    def executescript(self, sql: str):
+        with self._con.cursor() as cur:
+            for stmt in [s.strip() for s in sql.split(";") if s.strip()]:
+                cur.execute(stmt)
+        self._con.commit()
+
+    def commit(self):
+        self._con.commit()
+
+    def close(self):
+        self._con.close()
+
+
+def connect(db_path: Path | None = None):
+    """按 MAILUO_DB 选择后端：sqlite（默认）/ mysql。"""
+    if DB_BACKEND.lower() == "mysql":
+        if not DB_URL:
+            raise RuntimeError("MAILUO_DB=mysql 时必须提供 MAILUO_DB_URL")
+        return MySQLConn(DB_URL)
+    return SQLiteConn(db_path or DB_PATH)
+
+
+def rebuild_fts(con) -> None:
+    if con.backend == "sqlite":
+        con.executescript("INSERT INTO chunk_fts(chunk_fts) VALUES('rebuild');")
+        con.commit()

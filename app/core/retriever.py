@@ -1,8 +1,13 @@
-"""检索：多路召回 + RRF 融合 + 路径/符号加权。"""
+"""检索编排：多路召回 + RRF 融合 + 路径/符号/意图加权（与数据库后端无关）。
+
+打分语义由 search_backend 吸收：SQLite 的 bm25 越小越好、MySQL 的 MATCH 越大越好，
+这里只使用**排名**做 RRF，所以两套后端行为一致。
+"""
 import time
 
+from app.core import search_backend as sb
 from app.core.expander import expand_query
-from app.core.tokenize import make_snippet, to_fts_query
+from app.core.tokenize import make_snippet, tokens
 
 INTENTS = [
     ("run", ["跑", "运行", "启动", "安装", "命令", "run", "start", "install", "build", "deploy", "怎么用"]),
@@ -11,8 +16,6 @@ INTENTS = [
     ("deps", ["依赖", "库", "框架", "dependency", "framework", "package"]),
     ("trap", ["坑", "问题", "报错", "失败", "error", "bug", "冲突"]),
 ]
-
-FETCH = 24
 
 
 def classify_intent(q: str) -> str:
@@ -25,33 +28,20 @@ def classify_intent(q: str) -> str:
     return best
 
 
-def _fts(con, snapshot_id: str, expr: str, limit: int) -> list[dict]:
-    if not expr or expr == '""':
-        return []
-    try:
-        rows = con.execute(
-            """
-            SELECT c.id, c.path, c.start_line, c.end_line, c.text, c.symbols, c.lang,
-                   bm25(chunk_fts, 1.5, 1.3, 1.0) AS score
-            FROM chunk_fts JOIN chunk c ON c.id = chunk_fts.rowid
-            WHERE chunk_fts MATCH ? AND c.snapshot_id = ?
-            ORDER BY score LIMIT ?
-            """, (expr, snapshot_id, limit)).fetchall()
-    except Exception:
-        return []
-    return [dict(r) for r in rows]
+def _has_cjk(text: str) -> bool:
+    return any("\u4e00" <= ch <= "\u9fff" for ch in text)
 
 
 def search(con, snapshot_id: str, query: str, k: int = 8, log: bool = True) -> dict:
     t0 = time.perf_counter()
     intent = classify_intent(query)
-    expanded = expand_query(query) if any("\u4e00" <= ch <= "\u9fff" for ch in query) else query
-    loose = _fts(con, snapshot_id, to_fts_query(expanded, "OR"), FETCH)
-    strict = _fts(con, snapshot_id, to_fts_query(expanded, "AND"), FETCH)
+    expanded = expand_query(query) if _has_cjk(query) else query
 
-    # RRF 融合（两个召回通道）
+    loose = sb.query(con, snapshot_id, expanded, "OR")
+    strict = sb.query(con, snapshot_id, expanded, "AND")
+
     merged: dict[int, dict] = {}
-    for rank_list in (strict, loose):
+    for rank_list, tag in ((strict, "strict"), (loose, "loose")):
         for rank, row in enumerate(rank_list):
             cid = row["id"]
             if cid not in merged:
@@ -59,10 +49,9 @@ def search(con, snapshot_id: str, query: str, k: int = 8, log: bool = True) -> d
                 merged[cid]["rrf"] = 0.0
                 merged[cid]["why"] = []
             merged[cid]["rrf"] += 1.0 / (60 + rank + 1)
-            merged[cid]["why"].append("strict" if rank_list is strict else "loose")
+            merged[cid]["why"].append(tag)
 
-    # 路径/符号加权（意图命中文件名是最强信号）
-    terms = [t for t in to_fts_query(query, "OR").replace('"', "").split(" OR ") if t]
+    terms = [t for t in tokens(expanded, limit=12)]
     for row in merged.values():
         boost = 0.0
         low_path = row["path"].lower()
@@ -72,12 +61,11 @@ def search(con, snapshot_id: str, query: str, k: int = 8, log: bool = True) -> d
                 boost += 0.012
             if t in low_sym:
                 boost += 0.010
-        # 意图感知的路径先验（可单测、可解释：问"配置"就该优先 .env.example）
         if intent == "config" and ".env" in low_path:
             boost += 0.020
-        if intent == "run" and any(k in low_path for k in ("readme", "makefile", "docker-compose")):
+        if intent == "run" and any(x in low_path for x in ("readme", "makefile", "docker-compose")):
             boost += 0.010
-        if intent == "where" and any(k in low_path for k in ("handler", "route", "controller", "api/")):
+        if intent == "where" and any(x in low_path for x in ("handler", "route", "controller", "api/")):
             boost += 0.010
         row["boost"] = boost
         row["final"] = row["rrf"] + boost
@@ -94,11 +82,11 @@ def search(con, snapshot_id: str, query: str, k: int = 8, log: bool = True) -> d
         "cited": f'{r["path"]}#L{r["start_line"]}-L{r["end_line"]}',
     } for r in ordered]
 
-    intent = classify_intent(query)
     latency = round((time.perf_counter() - t0) * 1000, 1)
     if log:
-        con.execute("INSERT INTO search_log(query,intent,hits,latency_ms) VALUES(?,?,?,?)",
-                    (query, intent, len(results), latency))
+        from app.infra.db import now
+        con.execute("INSERT INTO search_log(query,intent,hits,latency_ms,created_at) VALUES(?,?,?,?,?)",
+                    (query, intent, len(results), latency, now()))
         con.commit()
     return {"query": query, "intent": intent, "latency_ms": latency,
             "hits": len(results), "results": results}

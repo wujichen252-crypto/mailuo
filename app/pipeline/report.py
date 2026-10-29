@@ -138,7 +138,7 @@ def generate(con, project_id: str, snapshot_id: str, project_name: str) -> dict:
 
 def latest(con, project_id: str) -> dict | None:
     row = con.execute(
-        "SELECT * FROM report WHERE project_id=? ORDER BY created_at DESC, rowid DESC LIMIT 1",
+        "SELECT * FROM report WHERE project_id=? ORDER BY created_at DESC LIMIT 1",
         (project_id,)).fetchone()
     if not row:
         return None

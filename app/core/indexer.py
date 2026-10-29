@@ -8,7 +8,7 @@ from pathlib import Path
 from app.core import rules, symbols
 from app.core.chunker import iter_chunks, iter_files, lang_of, read_text
 from app.core.tokenize import to_index_text
-from app.infra.db import connect
+from app.infra.db import connect, now
 
 
 def _parse_deps(root: Path, files: list[Path]) -> list[dict]:
@@ -72,9 +72,10 @@ def build_snapshot(con, project_id: str, root: Path, head_sha: str = "") -> dict
     loc = 0
     chunk_n = 0
 
-    con.execute("INSERT INTO snapshot(id, project_id, head_sha) VALUES(?,?,?)",
-                (snap_id, project_id, head_sha))
-    con.execute("DELETE FROM chunk_fts WHERE rowid IN (SELECT id FROM chunk WHERE snapshot_id=?)", (snap_id,))
+    con.execute("INSERT INTO snapshot(id, project_id, head_sha, created_at) VALUES(?,?,?,?)",
+                (snap_id, project_id, head_sha, now()))
+    if con.backend == "sqlite":
+        con.execute("DELETE FROM chunk_fts WHERE rowid IN (SELECT id FROM chunk WHERE snapshot_id=?)", (snap_id,))
 
     for p in files:
         rel = p.relative_to(root).as_posix()
@@ -90,8 +91,9 @@ def build_snapshot(con, project_id: str, root: Path, head_sha: str = "") -> dict
                 (snap_id, "file_chunk", rel_path, start, end, body,
                  to_index_text(body + "\n" + sym_text), sym_text, lang))
             rid = cur.lastrowid
-            con.execute("INSERT INTO chunk_fts(rowid,path,symbols,tok_text) VALUES(?,?,?,?)",
-                        (rid, rel_path, sym_text, to_index_text(body + "\n" + sym_text)))
+            if con.backend == "sqlite":
+                con.execute("INSERT INTO chunk_fts(rowid,path,symbols,tok_text) VALUES(?,?,?,?)",
+                            (rid, rel_path, sym_text, to_index_text(body + "\n" + sym_text)))
             chunk_n += 1
             lang_counter[lang] += 1
 

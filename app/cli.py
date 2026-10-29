@@ -80,7 +80,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "search":
         from app.core.retriever import search
-        snap = con.execute("SELECT id FROM snapshot WHERE project_id=? ORDER BY rowid DESC LIMIT 1",
+        snap = con.execute("SELECT id FROM snapshot WHERE project_id=? ORDER BY created_at DESC LIMIT 1",
                            (proj["id"],)).fetchone()
         if not snap:
             print("该项目还没有索引，先跑 index")

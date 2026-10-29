@@ -7,7 +7,7 @@ from pathlib import Path
 from app.config import REPOS
 from app.core import crawler
 from app.core.indexer import build_snapshot
-from app.infra.db import connect
+from app.infra.db import connect, now
 from app.pipeline.report import generate, latest
 
 
@@ -68,7 +68,7 @@ def list_projects(con) -> list[dict]:
         d["metrics"] = (rep or {}).get("metrics", {})
         snap = con.execute(
             "SELECT languages_json, files_count, loc FROM snapshot WHERE project_id=? "
-            "ORDER BY rowid DESC LIMIT 1", (d["id"],)).fetchone()
+            "ORDER BY created_at DESC LIMIT 1", (d["id"],)).fetchone()
         if snap:
             import json as _json
             d["languages"] = _json.loads(snap["languages_json"] or "{}")
@@ -87,7 +87,7 @@ def index_project(con, project_id: str) -> dict:
     root = Path(proj["local_path"])
     sha = proj["head_sha"] or crawler.head_sha(root)
     info = build_snapshot(con, project_id, root, sha)
-    con.execute("UPDATE project SET last_indexed_at=datetime('now'), head_sha=? WHERE id=?", (sha, project_id))
+    con.execute("UPDATE project SET last_indexed_at=?, head_sha=? WHERE id=?", (now(), sha, project_id))
     con.commit()
     return info
 
@@ -97,7 +97,7 @@ def analyze_project(con, project_id: str) -> dict:
     if not proj:
         raise ValueError("项目不存在")
     snap = con.execute(
-        "SELECT id FROM snapshot WHERE project_id=? ORDER BY created_at DESC, rowid DESC LIMIT 1",
+        "SELECT id FROM snapshot WHERE project_id=? ORDER BY created_at DESC LIMIT 1",
         (project_id,)).fetchone()
     if not snap:
         info = index_project(con, project_id)
@@ -105,7 +105,7 @@ def analyze_project(con, project_id: str) -> dict:
     else:
         snap_id = snap["id"]
     report = generate(con, project_id, snap_id, proj["name"])
-    con.execute("UPDATE project SET last_analyzed_at=datetime('now') WHERE id=?", (project_id,))
+    con.execute("UPDATE project SET last_analyzed_at=? WHERE id=?", (now(), project_id))
     con.commit()
     return report
 
