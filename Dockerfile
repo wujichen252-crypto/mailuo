@@ -11,7 +11,7 @@ COPY web/dist ./web/dist
 COPY fixtures ./fixtures
 COPY docs ./docs
 
-ENV SHITU_DATA=/app/data
+ENV MAILUO_DATA=/app/data
 RUN mkdir -p /app/data/repos
 
 EXPOSE 8000

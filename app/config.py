@@ -3,9 +3,9 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA = Path(os.getenv("SHITU_DATA", str(ROOT / "data")))
+DATA = Path(os.getenv("MAILUO_DATA", str(ROOT / "data")))
 REPOS = DATA / "repos"
-DB_PATH = Path(os.getenv("SHITU_DB", str(DATA / "shitu.sqlite")))
+DB_PATH = Path(os.getenv("MAILUO_DB", str(DATA / "mailuo.sqlite")))
 
 # LLM：默认 mock（评委零 key 也能完整跑通）
 MOCK_LLM = os.getenv("MOCK_LLM", "1") == "1"

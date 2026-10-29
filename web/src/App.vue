@@ -44,8 +44,8 @@ async function add() {
 <template>
   <header class="topbar">
     <div class="brand" @click="go('library')">
-      <div class="glyph">识</div>
-      <b>识途</b>
+      <div class="glyph">脉</div>
+      <b>脉络</b>
       <small>开源项目的接手说明书</small>
     </div>
     <nav class="nav">

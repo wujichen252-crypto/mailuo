@@ -1,4 +1,4 @@
-# 识途 shitu · 开源项目的接手说明书
+# 脉络 mailuo · 开源项目的接手说明书
 
 > **一个仓库只索引一次，全平台共享、每晚保鲜。**
 > AI 只能按我们设计的 12 槽位模板、从自研检索引擎里取证据来填槽；取不到就标"信息缺失"，不编。
@@ -13,7 +13,7 @@
 ### 方式 A：Docker（推荐）
 
 ```bash
-git clone <仓库地址> shitu && cd shitu
+git clone <仓库地址> mailuo && cd mailuo
 cp .env.example .env          # 默认 MOCK_LLM=1，不需要任何 API Key
 docker compose up -d --build
 open http://localhost:8080    # Windows: start http://localhost:8080
@@ -50,9 +50,9 @@ python -m app.cli serve               # http://localhost:8000
 ## 它解决了什么
 
 接手一个陌生仓库，真正贵的是"第一小时"：它怎么跑、入口在哪、改哪里、会踩什么坑。
-现有 AI 仓库问答（DeepWiki 类）给的是**一次性的百科快照**；识途给的是**可核查、每天保鲜的接手说明书**：
+现有 AI 仓库问答（DeepWiki 类）给的是**一次性的百科快照**；脉络给的是**可核查、每天保鲜的接手说明书**：
 
-| | DeepWiki 类 | 识途 |
+| | DeepWiki 类 | 脉络 |
 |---|---|---|
 | 刷新 | 一次生成，代码变了就过期 | 每晚重分析 + 手动触发，永远对应 HEAD |
 | 生成 | 模型自由发挥 | **12 槽位模板 + 自研检索引擎取证** |

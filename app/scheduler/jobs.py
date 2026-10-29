@@ -47,7 +47,7 @@ def _loop(con) -> None:
 def start_scheduler(con) -> None:
     if not ENABLE_SCHEDULER:
         return
-    t = threading.Thread(target=_loop, args=(con,), daemon=True, name="shitu-scheduler")
+    t = threading.Thread(target=_loop, args=(con,), daemon=True, name="mailuo-scheduler")
     t.start()
 
 

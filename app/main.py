@@ -16,7 +16,7 @@ from app.pipeline import citations
 from app.pipeline.report import latest
 from app.scheduler.jobs import run_due, start_scheduler
 
-app = FastAPI(title="识途 shitu", version="0.1.0")
+app = FastAPI(title="脉络 mailuo", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 con = connect()

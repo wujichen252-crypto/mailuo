@@ -1,14 +1,14 @@
 services:
-  shitu:
+  mailuo:
     build: .
-    image: shitu:local
-    container_name: shitu
+    image: mailuo:local
+    container_name: mailuo
     ports:
       - "8080:8000"
     env_file:
       - .env
     environment:
-      - SHITU_DATA=/app/data
+      - MAILUO_DATA=/app/data
       - MOCK_LLM=${MOCK_LLM:-1}
     volumes:
       - ./data:/app/data

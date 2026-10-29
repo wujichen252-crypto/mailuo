@@ -30,4 +30,4 @@ web:
 	cd web && pnpm install && pnpm build
 
 build: web
-	docker build -t shitu:local .
+	docker build -t mailuo:local .

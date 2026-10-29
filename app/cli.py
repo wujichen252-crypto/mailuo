@@ -22,7 +22,7 @@ def _ensure_local(con, path: str, name: str | None) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="shitu")
+    ap = argparse.ArgumentParser(prog="mailuo")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p_index = sub.add_parser("index", help="只建索引")
