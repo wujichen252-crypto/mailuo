@@ -1,0 +1,20 @@
+services:
+  shitu:
+    build: .
+    image: shitu:local
+    container_name: shitu
+    ports:
+      - "8080:8000"
+    env_file:
+      - .env
+    environment:
+      - SHITU_DATA=/app/data
+      - MOCK_LLM=${MOCK_LLM:-1}
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
