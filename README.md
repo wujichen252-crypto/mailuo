@@ -70,10 +70,12 @@ Vue3 SPA (web/dist, 由 FastAPI 直接托管)
 FastAPI (app/)
   ├ api        /api/projects /api/search /api/cite /api/share /api/admin
   ├ core       crawler · chunker · tokenize · symbols · rules · expander · retriever
-  ├ indexer    chunk -> FTS5(双 token) + 快照元数据 + 规则命中
+  ├ indexer    chunk -> 全文索引 + 快照元数据 + 规则命中
   ├ pipeline   template(12 槽位) · filler(mock|llm) · citations(回查) · report
   └ scheduler  每晚 00:00 · sha 去重 · 变更优先
-SQLite（零外部依赖：FTS5 倒排 + 元数据）
+数据库（双后端，一个环境变量切换）
+  ├ SQLite + FTS5    默认；评委复现零依赖
+  └ MySQL 8 + ngram  线上；多实例/备份
 ```
 
 **五层机制**（技术文档"意图控制"章的同源）：

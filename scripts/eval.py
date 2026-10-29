@@ -3,10 +3,14 @@
 跑法：python scripts/eval.py
 输出：markdown 表格（直接可贴技术文档）
 """
+import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+# 评测固定跑 SQLite 隔离库，避免污染线上 MySQL
+os.environ["MAILUO_DB"] = "sqlite"
 
 from app.config import ROOT  # noqa: E402
 from app.core.indexer import build_snapshot  # noqa: E402
