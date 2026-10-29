@@ -8,9 +8,9 @@ CREATE TABLE IF NOT EXISTS project (
   visibility VARCHAR(16) NOT NULL DEFAULT 'public',
   share_token VARCHAR(64) NOT NULL UNIQUE,
   head_sha VARCHAR(64) NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  last_indexed_at DATETIME NULL,
-  last_analyzed_at DATETIME NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  last_indexed_at DATETIME(6) NULL,
+  last_analyzed_at DATETIME(6) NULL,
   token_budget INT DEFAULT 80000
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS snapshot (
   deps_json LONGTEXT NOT NULL,
   entries_json LONGTEXT NOT NULL,
   config_json LONGTEXT NOT NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   KEY idx_snapshot_project (project_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS report (
   gaps_json LONGTEXT NOT NULL,
   metrics_json LONGTEXT NOT NULL,
   model VARCHAR(16) NOT NULL DEFAULT 'mock',
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   KEY idx_report_project (project_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -75,5 +75,5 @@ CREATE TABLE IF NOT EXISTS search_log (
   intent VARCHAR(24) NOT NULL DEFAULT '',
   hits INT NOT NULL DEFAULT 0,
   latency_ms DOUBLE NOT NULL DEFAULT 0,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

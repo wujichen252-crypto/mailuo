@@ -100,7 +100,8 @@ CREATE INDEX IF NOT EXISTS idx_finding_snap ON finding(snapshot_id);
 
 
 def now() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    """带微秒的时间戳：保证同一秒内多次分析时，created_at 也能正确排序。"""
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
 
 
 class SQLiteConn:

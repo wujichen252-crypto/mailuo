@@ -74,23 +74,48 @@ class MockFiller:
 
     # ---- 各槽位 ----
     def what(self) -> list[dict]:
-        """取 README 第一段正文：跳过 badge / 图片 / 标题 / 列表符号 / 表格分隔线。"""
-        for c in self._chunks():
-            if "readme" not in c["path"].lower():
-                continue
-            for i, line in enumerate(c["text"].splitlines()):
-                raw = line.strip()
-                if raw.lstrip().startswith(("-", "*", "+", "|", ">")):
-                    continue          # 跳过 feature 列表/badge/引用块，优先选真正的段落
-                s = raw.lstrip("-*+ ").strip()
-                if len(s) < 24:
-                    continue
-                if s.startswith(("#", "---", "|", ">")) or "![" in s or "](" in s:
-                    continue
-                if s.isupper() or s.endswith(":"):  # 纯标题式行
-                    continue
-                ln = c["start_line"] + i
-                return [{"text": _first_sentence(s), "citations": [_cite(c["path"], ln, ln)]}]
+        """取 README 的简介段：优先文件开头，跳过 badge/标题/列表/代码块/目录树/env 赋值。"""
+        chunks = [c for c in self._chunks() if "readme" in c["path"].lower()]
+        chunks.sort(key=lambda c: c["start_line"])
+        passes = ([c for c in chunks if c["start_line"] == 1], chunks)
+        for group in passes:
+            for c in group:
+                in_fence = False
+                for i, line in enumerate(c["text"].splitlines()):
+                    raw = line.strip()
+                    if raw.startswith("```"):
+                        in_fence = not in_fence
+                        continue
+                    if in_fence:
+                        continue
+                    if not raw or len(raw) < 24:
+                        continue
+                    if raw[0] in "-*+|>│├└─=#":
+                        continue
+                    if raw.startswith("[") or raw.startswith("!["):     # badge 行
+                        continue
+                    # 把 markdown 链接还原成文字，避免简介里有链接就被丢掉
+                    clean = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", raw).strip()
+                    if len(clean) < 24:
+                        continue
+                    if re.match(r"^[A-Z][A-Z0-9_]{2,}\s*=", raw):   # env 赋值行
+                        continue
+                    if re.match(r"^[a-z_]+:\s", raw):              # YAML 键值
+                        continue
+                    if re.match(r"^(git|npm|pnpm|yarn|go|pip|uv|docker|curl|cd|cp|mv|python|make|brew|apt|import|from)\b", clean, re.I):
+                        continue
+                    if "://" in clean or clean.startswith("./"):
+                        continue
+                    if clean.isupper() or clean.endswith(":") or clean.endswith("："):
+                        continue
+                    text = _first_sentence(clean)
+                    # 至少要像一句话：含空格且 >= 6 个词，或中文 >= 12 字
+                    latin_words = len(re.findall(r"[A-Za-z0-9]+", text))
+                    cjk_chars = len(re.findall(r"[\u4e00-\u9fff]", text))
+                    if latin_words < 6 and cjk_chars < 12:
+                        continue
+                    ln = c["start_line"] + i
+                    return [{"text": text, "citations": [_cite(c["path"], ln, ln)]}]
         return []
 
     def stack(self) -> list[dict]:
@@ -98,7 +123,14 @@ class MockFiller:
         total = sum(langs.values()) or 1
         top = sorted(langs.items(), key=lambda kv: -kv[1])[:3]
         lang_txt = "、".join(f"{k} {v * 100 // total}%" for k, v in top)
-        deps = [d["name"] for d in self.meta["deps"]][:5]
+        def label(n: str) -> str:
+            parts = n.split("/")
+            last = parts[-1]
+            if re.match(r"^v\d+$", last) and len(parts) > 1:
+                last = parts[-2]
+            return last.rsplit("@", 1)[0]
+
+        deps = [label(d["name"]) for d in self.meta["deps"]][:3]
         if not deps:
             return []
         c = self._dep_file_chunk()
@@ -115,20 +147,27 @@ class MockFiller:
             fname = low.split("/")[-1]
             if "readme" not in low and fname not in {"makefile", "docker-compose.yml", "docker-compose.yaml", "setup.sh"}:
                 continue
-            for line in c["text"].splitlines():
-                m = CMD.match(line)
+            in_fence = False
+            for i, line in enumerate(c["text"].splitlines()):
+                raw_line = line.strip()
+                if raw_line.startswith("```"):
+                    in_fence = not in_fence
+                    continue
+                if not in_fence and "readme" in low:
+                    continue          # README 只认代码块里的命令，避免正文句子被当成命令
+                m = CMD.match(raw_line)
                 if not m:
                     continue
-                raw = line.strip().strip("`")
+                raw = raw_line.strip("`")
                 if DROP_CMD.search(raw):
                     continue
                 cmd = _clip(raw)
-                sig = " ".join(raw.split()[:4]).lower()
-                if sig in seen or cmd in seen:
+                sig = " ".join(raw.split()).lower()
+                if sig in seen:
                     continue
                 seen.add(sig)
-                seen.add(cmd)
-                out.append({"text": cmd, "citations": [_cite(c["path"], self._line_of(c, line.strip()[:20]))]})
+                ln = c["start_line"] + i
+                out.append({"text": cmd, "citations": [_cite(c["path"], ln)]})
                 if len(out) >= 4:
                     return out
         return out
@@ -173,8 +212,9 @@ class MockFiller:
         keys = self.meta["config"]
         if keys:
             first = keys[0]
-            names = "、".join(k["key"] for k in keys[:6])
-            return [{"text": _clip(f"需要配置 {len(keys)} 项环境变量：{names}"),
+            shown = "、".join(k["key"] for k in keys[:3])
+            more = f" 等 {len(keys)} 项" if len(keys) > 3 else ""
+            return [{"text": _clip(f"启动前需配置 {shown}{more}"),
                      "citations": [_cite(first["path"], first["line"], keys[min(len(keys) - 1, 6)]["line"])]}]
         # 没有 .env.example -> 从 config/*.yaml 与常量定义反推（仍是真实文件行，不是猜测）
         found: list[tuple[str, str, int]] = []
