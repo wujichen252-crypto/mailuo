@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 运行时数据（索引库与克隆的仓库不入库）
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# 前端依赖与构建产物（dist 需要提交：评委直接跑，不装 Node）
+web/node_modules/
+web/.vite/
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
